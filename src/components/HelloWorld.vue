@@ -1,58 +1,102 @@
 <template>
-  <div class="hello">
-    <h1>{{ msg }}</h1>
-    <p>
-      For a guide and recipes on how to configure / customize this project,<br>
-      check out the
-      <a href="https://cli.vuejs.org" target="_blank" rel="noopener">vue-cli documentation</a>.
-    </p>
-    <h3>Installed CLI Plugins</h3>
+  <div>
+    <div v-if="!editingNote">
+      <input type="text" v-model="newNote" placeholder="Enter note">
+      <button @click="addNote">Add Note</button>
+    </div>
+    <div v-else>
+      <input type="text" v-model="editingNote.title" placeholder="Edit note">
+      <button @click="updateNote">Update Note</button>
+    </div>
     <ul>
-      <li><a href="https://github.com/vuejs/vue-cli/tree/dev/packages/%40vue/cli-plugin-babel" target="_blank" rel="noopener">babel</a></li>
-      <li><a href="https://github.com/vuejs/vue-cli/tree/dev/packages/%40vue/cli-plugin-eslint" target="_blank" rel="noopener">eslint</a></li>
-    </ul>
-    <h3>Essential Links</h3>
-    <ul>
-      <li><a href="https://vuejs.org" target="_blank" rel="noopener">Core Docs</a></li>
-      <li><a href="https://forum.vuejs.org" target="_blank" rel="noopener">Forum</a></li>
-      <li><a href="https://chat.vuejs.org" target="_blank" rel="noopener">Community Chat</a></li>
-      <li><a href="https://twitter.com/vuejs" target="_blank" rel="noopener">Twitter</a></li>
-      <li><a href="https://news.vuejs.org" target="_blank" rel="noopener">News</a></li>
-    </ul>
-    <h3>Ecosystem</h3>
-    <ul>
-      <li><a href="https://router.vuejs.org" target="_blank" rel="noopener">vue-router</a></li>
-      <li><a href="https://vuex.vuejs.org" target="_blank" rel="noopener">vuex</a></li>
-      <li><a href="https://github.com/vuejs/vue-devtools#vue-devtools" target="_blank" rel="noopener">vue-devtools</a></li>
-      <li><a href="https://vue-loader.vuejs.org" target="_blank" rel="noopener">vue-loader</a></li>
-      <li><a href="https://github.com/vuejs/awesome-vue" target="_blank" rel="noopener">awesome-vue</a></li>
+      <li v-for="note in notes" :key="note._id">
+        {{ note.title }}
+        <button @click="deleteNote(note)">Delete</button>
+        <button @click="editNote(note)">Edit</button>
+      </li>
     </ul>
   </div>
 </template>
 
 <script>
+import PouchDB from 'pouchdb';
 export default {
   name: 'HelloWorld',
-  props: {
-    msg: String
-  }
+  data() {
+    return {
+      notes: [],
+      newNote: '',
+      editingNote: null,
+      db: new PouchDB('my-notes'),
+    };
+  },
+  mounted() {
+    this.getNotes();
+  },
+  methods: {
+    getNotes() {
+      this.db.allDocs({ include_docs: true }).then((result) => {
+        this.notes = result.rows.map((row) => row.doc);
+      }).catch((err) => {
+        console.error(err);
+      });
+    },
+    addNote() {
+      if (!this.newNote.trim()) return;
+
+      const note = {
+        _id: new Date().toISOString(),
+        title: this.newNote,
+      };
+
+      this.db.put(note).then(() => {
+        this.notes.push(note);
+        this.newNote = '';
+      }).catch((err) => {
+        console.error(err);
+      });
+    },
+    deleteNote(note) {
+      this.db.get(note._id).then((latestNote) => {
+        return this.db.remove(latestNote);
+      }).then(() => {
+        this.notes = this.notes.filter((n) => n._id !== note._id);
+      }).catch((err) => {
+        console.error(err);
+      });
+    },
+    editNote(note) {
+      this.editingNote = { ...note };
+    },
+    updateNote() {
+      if (!this.editingNote || !this.editingNote.title.trim()) return;
+
+      this.db.put(this.editingNote).then(() => {
+        const index = this.notes.findIndex((note) => note._id === this.editingNote._id);
+        if (index !== -1) {
+          this.notes.splice(index, 1, this.editingNote);
+        }
+        this.editingNote = null;
+      }).catch((err) => {
+        console.error(err);
+      });
+    },
+  },
 }
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
-<style scoped>
-h3 {
-  margin: 40px 0 0;
-}
+<style>
+/* Add some basic styling */
 ul {
   list-style-type: none;
   padding: 0;
 }
+
 li {
-  display: inline-block;
-  margin: 0 10px;
+  margin: 0.5em 0;
 }
-a {
-  color: #42b983;
+
+button {
+  margin-left: 0.5em;
 }
 </style>
